@@ -2,6 +2,9 @@
   "name": "payattention",
   "version": "0.1.0",
   "private": true,
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "description": "Pause media when you leave a tab so you stay focused on what you are watching or listening to.",
   "type": "module",
   "scripts": {
@@ -11,6 +14,7 @@
     "build:firefox": "wxt build -b firefox",
     "zip": "wxt zip",
     "zip:firefox": "wxt zip -b firefox",
+    "package:release": "npm run zip && npm run zip:firefox && node scripts/package-release.mjs",
     "typecheck": "tsc --noEmit",
     "postinstall": "wxt prepare"
   },
