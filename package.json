@@ -1,0 +1,21 @@
+{
+  "name": "payattention",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Pause media when you leave a tab so you stay focused on what you are watching or listening to.",
+  "type": "module",
+  "scripts": {
+    "dev": "wxt",
+    "dev:firefox": "wxt -b firefox",
+    "build": "wxt build",
+    "build:firefox": "wxt build -b firefox",
+    "zip": "wxt zip",
+    "zip:firefox": "wxt zip -b firefox",
+    "typecheck": "tsc --noEmit",
+    "postinstall": "wxt prepare"
+  },
+  "devDependencies": {
+    "typescript": "^5.8.3",
+    "wxt": "^0.20.27"
+  }
+}

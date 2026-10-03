@@ -1,0 +1,85 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>PayAttention</title>
+  </head>
+  <body>
+    <main class="app">
+      <header class="brand-row">
+        <div class="brand-mark" aria-hidden="true">PA</div>
+        <div>
+          <h1>PayAttention</h1>
+          <p>Stay with what you play.</p>
+        </div>
+        <label class="switch" title="Enable or disable PayAttention">
+          <input id="enabledToggle" type="checkbox" />
+          <span></span>
+        </label>
+      </header>
+
+      <section class="status-card">
+        <div class="status-line">
+          <span id="statusDot" class="status-dot"></span>
+          <strong id="statusTitle">Loading…</strong>
+        </div>
+        <p id="siteName" class="site-name"></p>
+        <p id="statusReason" class="muted-copy"></p>
+      </section>
+
+      <section id="controls" class="controls" hidden>
+        <button id="tabAllowanceButton" class="primary" type="button">
+          Allow until tab closes
+        </button>
+
+        <div class="inline-control">
+          <select id="temporaryDuration" aria-label="Temporary allowance duration">
+            <option value="1">1 minute</option>
+            <option value="5">5 minutes</option>
+            <option value="15" selected>15 minutes</option>
+            <option value="30">30 minutes</option>
+            <option value="60">1 hour</option>
+            <option value="custom">Custom</option>
+          </select>
+          <input
+            id="customMinutes"
+            type="number"
+            min="1"
+            max="43200"
+            value="90"
+            aria-label="Custom minutes"
+            hidden
+          />
+          <button id="temporaryAllowanceButton" type="button">Temporarily allow site</button>
+        </div>
+
+        <button id="permanentAllowanceButton" class="secondary" type="button">
+          Permanently allow this site
+        </button>
+
+        <label class="field">
+          <span>Behavior for this exact site</span>
+          <div class="inline-control">
+            <select id="siteBehavior">
+              <option value="default">Use default</option>
+              <option value="allow">Allow</option>
+              <option value="pause">Pause media</option>
+              <option value="mute">Mute tab audio</option>
+              <option value="pause-and-mute">Pause + mute fallback</option>
+            </select>
+            <button id="saveBehaviorButton" type="button">Save</button>
+          </div>
+        </label>
+      </section>
+
+      <p id="feedback" class="feedback" role="status" aria-live="polite"></p>
+
+      <footer>
+        <button id="settingsButton" class="link-button" type="button">Settings & rules</button>
+        <span>Local-only. No analytics.</span>
+      </footer>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>

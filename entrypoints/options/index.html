@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="manifest.open_in_tab" content="true" />
+    <title>PayAttention Settings</title>
+  </head>
+  <body>
+    <header class="hero">
+      <div class="hero-inner">
+        <div class="brand-mark" aria-hidden="true">PA</div>
+        <div>
+          <h1>PayAttention</h1>
+          <p>Stay focused on the media you intentionally chose to play.</p>
+        </div>
+        <span class="privacy-pill">100% local</span>
+      </div>
+    </header>
+
+    <main class="layout">
+      <nav class="sidebar" aria-label="Settings sections">
+        <a href="#behavior">Behavior</a>
+        <a href="#notifications">Notifications</a>
+        <a href="#rules">Site rules</a>
+        <a href="#temporary">Temporary exceptions</a>
+        <a href="#activity">Activity</a>
+        <a href="#data">Import & export</a>
+      </nav>
+
+      <div class="content">
+        <section id="behavior" class="card">
+          <div class="section-heading">
+            <div>
+              <h2>Core behavior</h2>
+              <p>PayAttention pauses HTML audio and video whenever a document becomes hidden.</p>
+            </div>
+          </div>
+
+          <label class="setting-row">
+            <div>
+              <strong>Enable PayAttention</strong>
+              <span>Globally turn automatic pausing on or off.</span>
+            </div>
+            <input id="enabled" type="checkbox" />
+          </label>
+
+          <label class="setting-row">
+            <div>
+              <strong>Automatically resume on return</strong>
+              <span>Only resumes media that PayAttention itself paused.</span>
+            </div>
+            <input id="autoResume" type="checkbox" />
+          </label>
+
+          <label class="setting-row">
+            <div>
+              <strong>All-audio fallback</strong>
+              <span>Also mute hidden tabs to catch Web Audio, games, ads, and unusual players.</span>
+            </div>
+            <input id="muteFallbackEnabled" type="checkbox" />
+          </label>
+
+          <div class="shortcut-box">
+            <div>
+              <strong>Keyboard shortcuts</strong>
+              <p><kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>A</kbd> toggles a tab-close exception. <kbd>Alt</kbd> + <kbd>Shift</kbd> + <kbd>P</kbd> toggles the extension.</p>
+            </div>
+            <button id="shortcutButton" type="button">Manage shortcuts</button>
+          </div>
+        </section>
+
+        <section id="notifications" class="card">
+          <div class="section-heading">
+            <div>
+              <h2>Paused notification</h2>
+              <p>A small in-page toast appears when you return to a tab that PayAttention handled.</p>
+            </div>
+          </div>
+
+          <label class="setting-row">
+            <div><strong>Show notification</strong><span>Disable this for completely silent operation.</span></div>
+            <input id="showToast" type="checkbox" />
+          </label>
+          <label class="setting-row">
+            <div><strong>Show Resume button</strong><span>Available when automatic resume is off.</span></div>
+            <input id="toastShowUndo" type="checkbox" />
+          </label>
+          <label class="setting-row">
+            <div><strong>Show pause reason</strong><span>Explains that the tab became hidden.</span></div>
+            <input id="toastShowReason" type="checkbox" />
+          </label>
+          <label class="number-row">
+            <div><strong>Notification duration</strong><span>Between 2 and 15 seconds.</span></div>
+            <div class="number-input"><input id="toastDurationSeconds" type="number" min="2" max="15" step="1" /><span>seconds</span></div>
+          </label>
+        </section>
+
+        <section id="rules" class="card">
+          <div class="section-heading">
+            <div>
+              <h2>Site-specific rules</h2>
+              <p>More-specific URL patterns override subdomains, which override whole-domain rules.</p>
+            </div>
+          </div>
+
+          <form id="ruleForm" class="rule-form">
+            <label>
+              <span>Match</span>
+              <select id="ruleMatchType">
+                <option value="domain">Whole domain + subdomains</option>
+                <option value="subdomain">Exact hostname</option>
+                <option value="url-pattern">URL pattern</option>
+              </select>
+            </label>
+            <label class="grow">
+              <span>Pattern</span>
+              <input id="rulePattern" type="text" placeholder="example.com or https://example.com/watch/*" required />
+            </label>
+            <label>
+              <span>Behavior</span>
+              <select id="ruleBehavior">
+                <option value="allow">Allow</option>
+                <option value="pause">Pause media</option>
+                <option value="mute">Mute tab</option>
+                <option value="pause-and-mute">Pause + mute</option>
+              </select>
+            </label>
+            <button type="submit">Add rule</button>
+          </form>
+          <p id="ruleFeedback" class="feedback" role="status"></p>
+
+          <div class="table-wrap">
+            <table>
+              <thead><tr><th>Pattern</th><th>Match type</th><th>Behavior</th><th></th></tr></thead>
+              <tbody id="rulesBody"></tbody>
+            </table>
+          </div>
+          <p id="rulesEmpty" class="empty">No permanent rules yet.</p>
+        </section>
+
+        <section id="temporary" class="card">
+          <div class="section-heading">
+            <div>
+              <h2>Temporary site exceptions</h2>
+              <p>Timed exceptions are stored locally and automatically disappear when they expire.</p>
+            </div>
+          </div>
+          <div id="temporaryList" class="list"></div>
+          <p id="temporaryEmpty" class="empty">No active temporary site exceptions.</p>
+          <p class="note">“Until tab closes” exceptions live only in browser session memory and are managed from the toolbar popup.</p>
+        </section>
+
+        <section id="activity" class="card">
+          <div class="section-heading split">
+            <div>
+              <h2>Recent activity</h2>
+              <p>Optional local log of hostname, time, action, and media count. Page titles and content are never recorded.</p>
+            </div>
+            <button id="clearActivityButton" class="secondary" type="button">Clear log</button>
+          </div>
+
+          <label class="setting-row">
+            <div><strong>Keep a recent activity log</strong><span>Off by default. Retains at most the number below.</span></div>
+            <input id="activityLogEnabled" type="checkbox" />
+          </label>
+          <label class="number-row">
+            <div><strong>Maximum entries</strong><span>Between 10 and 500.</span></div>
+            <div class="number-input"><input id="maxActivityEntries" type="number" min="10" max="500" step="10" /><span>entries</span></div>
+          </label>
+          <div id="activityList" class="list activity-list"></div>
+          <p id="activityEmpty" class="empty">No activity recorded.</p>
+        </section>
+
+        <section id="data" class="card">
+          <div class="section-heading">
+            <div>
+              <h2>Import, export, and privacy</h2>
+              <p>Exports contain settings and site rules only. Activity history is deliberately excluded.</p>
+            </div>
+          </div>
+          <div class="button-row">
+            <button id="exportButton" type="button">Export settings & rules</button>
+            <label class="file-button">Import settings & rules<input id="importInput" type="file" accept="application/json,.json" /></label>
+            <button id="resetButton" class="danger" type="button">Reset settings</button>
+          </div>
+          <p id="dataFeedback" class="feedback" role="status"></p>
+          <div class="privacy-copy">
+            <strong>Local-only design</strong>
+            <p>PayAttention has no server, account, analytics, advertisements, telemetry, or remote code. It does not read page text. It only detects and controls media elements, observes document visibility, and—when enabled—changes the browser tab’s mute state.</p>
+          </div>
+        </section>
+      </div>
+    </main>
+    <script type="module" src="./main.ts"></script>
+  </body>
+</html>
