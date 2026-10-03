@@ -27,6 +27,15 @@ export interface SiteRule {
   createdAt: number;
 }
 
+export interface SiteNotificationRule {
+  id: string;
+  matchType: RuleMatchType;
+  pattern: string;
+  showToast: boolean;
+  showResume: boolean;
+  createdAt: number;
+}
+
 export interface TemporarySiteAllowance {
   id: string;
   hostname: string;
@@ -88,4 +97,5 @@ export interface ExportPayload {
   exportedAt: string;
   settings: Settings;
   rules: SiteRule[];
+  notificationRules?: SiteNotificationRule[];
 }

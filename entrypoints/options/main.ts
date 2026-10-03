@@ -5,11 +5,13 @@ import {
   clearActivityLog,
   getActivityLog,
   getRules,
+  getNotificationRules,
   getSettings,
   getTemporarySiteAllowances,
   replaceSettings,
   saveSettings,
   setRules,
+  setNotificationRules,
   setTemporarySiteAllowances,
 } from '../../utils/storage';
 import type {
@@ -18,6 +20,7 @@ import type {
   Settings,
   SiteBehavior,
   SiteRule,
+  SiteNotificationRule,
 } from '../../utils/types';
 import { makeId, normalizeHostname } from '../../utils/url';
 import './style.css';
@@ -45,6 +48,16 @@ const ruleBehavior = element<HTMLSelectElement>('#ruleBehavior');
 const ruleFeedback = element<HTMLElement>('#ruleFeedback');
 const rulesBody = element<HTMLTableSectionElement>('#rulesBody');
 const rulesEmpty = element<HTMLElement>('#rulesEmpty');
+const notificationRulesBody = element<HTMLTableSectionElement>('#notificationRulesBody');
+const notificationRulesEmpty = element<HTMLElement>('#notificationRulesEmpty');
+const notificationRuleForm = element<HTMLFormElement>('#notificationRuleForm');
+const notificationMatchType = element<HTMLSelectElement>('#notificationMatchType');
+const notificationPattern = element<HTMLInputElement>('#notificationPattern');
+const notificationShow = element<HTMLInputElement>('#notificationShow');
+const notificationResume = element<HTMLInputElement>('#notificationResume');
+const notificationFeedback = element<HTMLElement>('#notificationFeedback');
+const behaviorRulesPanel = element<HTMLElement>('#behaviorRulesPanel');
+const notificationRulesPanel = element<HTMLElement>('#notificationRulesPanel');
 const temporaryList = element<HTMLElement>('#temporaryList');
 const temporaryEmpty = element<HTMLElement>('#temporaryEmpty');
 const activityList = element<HTMLElement>('#activityList');
@@ -57,6 +70,7 @@ const dataFeedback = element<HTMLElement>('#dataFeedback');
 
 let currentSettings: Settings = { ...DEFAULT_SETTINGS };
 let currentRules: SiteRule[] = [];
+let currentNotificationRules: SiteNotificationRule[] = [];
 
 async function notifyChanged(): Promise<void> {
   try {
@@ -162,6 +176,30 @@ function renderRules(): void {
   }
 }
 
+function renderNotificationRules(): void {
+  notificationRulesBody.replaceChildren();
+  notificationRulesEmpty.hidden = currentNotificationRules.length > 0;
+  for (const rule of currentNotificationRules) {
+    const row = document.createElement('tr');
+    const pattern = document.createElement('td'); pattern.textContent = rule.pattern;
+    const match = document.createElement('td'); match.textContent = matchTypeText(rule.matchType);
+    const notification = document.createElement('td');
+    const notificationSelect = document.createElement('select');
+    for (const [value, label] of [['true', 'On'], ['false', 'Off']]) { const option = document.createElement('option'); option.value = value; option.textContent = label; option.selected = String(rule.showToast) === value; notificationSelect.append(option); }
+    notificationSelect.addEventListener('change', () => { void (async () => { currentNotificationRules = currentNotificationRules.map((item) => item.id === rule.id ? { ...item, showToast: notificationSelect.value === 'true' } : item); await setNotificationRules(currentNotificationRules); await notifyChanged(); })(); });
+    notification.append(notificationSelect);
+    const resume = document.createElement('td');
+    const resumeSelect = document.createElement('select');
+    for (const [value, label] of [['true', 'On'], ['false', 'Off']]) { const option = document.createElement('option'); option.value = value; option.textContent = label; option.selected = String(rule.showResume) === value; resumeSelect.append(option); }
+    resumeSelect.addEventListener('change', () => { void (async () => { currentNotificationRules = currentNotificationRules.map((item) => item.id === rule.id ? { ...item, showResume: resumeSelect.value === 'true' } : item); await setNotificationRules(currentNotificationRules); await notifyChanged(); })(); });
+    resume.append(resumeSelect);
+    const action = document.createElement('td');
+    const remove = document.createElement('button'); remove.type = 'button'; remove.className = 'icon-button'; remove.textContent = 'Remove';
+    remove.addEventListener('click', () => { void (async () => { currentNotificationRules = currentNotificationRules.filter((item) => item.id !== rule.id); await setNotificationRules(currentNotificationRules); renderNotificationRules(); await notifyChanged(); })(); });
+    action.append(remove); row.append(pattern, match, notification, resume, action); notificationRulesBody.append(row);
+  }
+}
+
 async function renderTemporaryAllowances(): Promise<void> {
   const allowances = await getTemporarySiteAllowances();
   temporaryList.replaceChildren();
@@ -175,6 +213,9 @@ async function renderTemporaryAllowances(): Promise<void> {
     title.textContent = allowance.hostname;
     const detail = document.createElement('span');
     detail.textContent = `Expires ${new Date(allowance.expiresAt).toLocaleString()}`;
+    const expiryInput = document.createElement('input');
+    expiryInput.type = 'datetime-local';
+    expiryInput.value = new Date(allowance.expiresAt - new Date(allowance.expiresAt).getTimezoneOffset() * 60_000).toISOString().slice(0, 16);
     copy.append(title, detail);
 
     const remove = document.createElement('button');
@@ -191,7 +232,10 @@ async function renderTemporaryAllowances(): Promise<void> {
         await notifyChanged();
       })();
     });
-    row.append(copy, remove);
+    const update = document.createElement('button'); update.type = 'button'; update.className = 'secondary'; update.textContent = 'Change expiry';
+    update.addEventListener('click', () => { void (async () => { const expiresAt = new Date(expiryInput.value).getTime(); if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) { setFeedback(dataFeedback, 'Choose a future expiry time.', true); return; } const current = await getTemporarySiteAllowances(); await setTemporarySiteAllowances(current.map((item) => item.id === allowance.id ? { ...item, expiresAt } : item)); await renderTemporaryAllowances(); await notifyChanged(); })(); });
+    const expiryControl = document.createElement('div'); expiryControl.className = 'expiry-control'; expiryControl.append(expiryInput, update);
+    row.append(copy, expiryControl, remove);
     temporaryList.append(row);
   }
 }
@@ -259,12 +303,35 @@ function isValidImportedRule(value: unknown): value is SiteRule {
   );
 }
 
+function isValidImportedNotificationRule(value: unknown): value is SiteNotificationRule {
+  if (!value || typeof value !== 'object') return false;
+  const rule = value as Partial<SiteNotificationRule>;
+  return typeof rule.id === 'string' && ['domain', 'subdomain', 'url-pattern'].includes(rule.matchType ?? '') && typeof rule.pattern === 'string' && typeof rule.showToast === 'boolean' && typeof rule.showResume === 'boolean' && typeof rule.createdAt === 'number';
+}
+
 async function load(): Promise<void> {
-  [currentSettings, currentRules] = await Promise.all([getSettings(), getRules()]);
+  [currentSettings, currentRules, currentNotificationRules] = await Promise.all([getSettings(), getRules(), getNotificationRules()]);
   renderSettings();
   renderRules();
+  renderNotificationRules();
   await Promise.all([renderTemporaryAllowances(), renderActivity()]);
 }
+
+document.querySelectorAll<HTMLButtonElement>('[data-rule-tab]').forEach((button) => button.addEventListener('click', () => {
+  const notifications = button.dataset.ruleTab === 'notifications';
+  behaviorRulesPanel.hidden = notifications;
+  notificationRulesPanel.hidden = !notifications;
+  document.querySelectorAll('[data-rule-tab]').forEach((tab) => tab.classList.toggle('active', tab === button));
+}));
+
+notificationRuleForm.addEventListener('submit', (event) => {
+  event.preventDefault();
+  const matchType = notificationMatchType.value as RuleMatchType;
+  const pattern = normalizeRulePattern(matchType, notificationPattern.value);
+  if (!pattern || (matchType === 'url-pattern' && !/^https?:\/\//i.test(pattern))) { setFeedback(notificationFeedback, 'Enter a valid domain or http(s) URL pattern.', true); return; }
+  currentNotificationRules.push({ id: makeId('notify'), matchType, pattern, showToast: notificationShow.checked, showResume: notificationResume.checked, createdAt: Date.now() });
+  void (async () => { await setNotificationRules(currentNotificationRules); notificationPattern.value = ''; renderNotificationRules(); await notifyChanged(); setFeedback(notificationFeedback, 'Notification rule added.'); })();
+});
 
 enabled.addEventListener('change', () => void updateSetting({ enabled: enabled.checked }));
 autoResume.addEventListener('change', () => void updateSetting({ autoResume: autoResume.checked }));
@@ -337,6 +404,7 @@ exportButton.addEventListener('click', () => {
       exportedAt: new Date().toISOString(),
       settings: await getSettings(),
       rules: await getRules(),
+      notificationRules: await getNotificationRules(),
     };
     const blob = new Blob([JSON.stringify(payload, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
@@ -360,10 +428,11 @@ importInput.addEventListener('change', () => {
         !isValidImportedSettings(parsed.settings) ||
         !Array.isArray(parsed.rules) ||
         !parsed.rules.every(isValidImportedRule)
+        || (parsed.notificationRules !== undefined && (!Array.isArray(parsed.notificationRules) || !parsed.notificationRules.every(isValidImportedNotificationRule)))
       ) {
         throw new Error('This is not a valid PayAttention export.');
       }
-      await Promise.all([replaceSettings(parsed.settings), setRules(parsed.rules)]);
+      await Promise.all([replaceSettings(parsed.settings), setRules(parsed.rules), setNotificationRules(parsed.notificationRules ?? [])]);
       await load();
       await notifyChanged();
       setFeedback(dataFeedback, 'Settings and rules imported.');
@@ -385,7 +454,7 @@ resetButton.addEventListener('click', () => {
   );
   if (!confirmed) return;
   void (async () => {
-    await Promise.all([replaceSettings(DEFAULT_SETTINGS), setRules([])]);
+    await Promise.all([replaceSettings(DEFAULT_SETTINGS), setRules([]), setNotificationRules([])]);
     await load();
     await notifyChanged();
     setFeedback(dataFeedback, 'Settings and permanent rules reset.');

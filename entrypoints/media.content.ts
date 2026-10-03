@@ -20,8 +20,10 @@ export default defineContentScript({
     const isTopFrame = window === window.top;
     let pendingToast: ToastPayload | null = null;
     let toastHost: HTMLElement | null = null;
+    let toastTimer: number | undefined;
     let lastKnownHidden = document.hidden;
     let enforcing = false;
+    let visibilityVersion = 0;
 
     const getPolicy = async (): Promise<ResolvedPolicy | null> => {
       try {
@@ -116,13 +118,14 @@ export default defineContentScript({
       }
     };
 
-    const notifyVisibility = async (hidden: boolean): Promise<VisibilityResponse | null> => {
+    const notifyVisibility = async (hidden: boolean, transitionId: number): Promise<VisibilityResponse | null> => {
       if (!isTopFrame) return null;
       try {
         return (await browser.runtime.sendMessage({
           type: 'DOCUMENT_VISIBILITY',
           hidden,
           url: location.href,
+          transitionId,
         } satisfies RuntimeMessage)) as VisibilityResponse;
       } catch {
         return null;
@@ -130,18 +133,20 @@ export default defineContentScript({
     };
 
     const enforceHiddenState = async (): Promise<void> => {
+      const version = visibilityVersion;
       const policy = await getPolicy();
       if (!policy) return;
+      if (!document.hidden || visibilityVersion !== version) return;
 
       if (policy.enabled && !policy.allowed && policy.shouldPause) {
         const count = pauseAllMedia();
         await notifyFramePaused(count);
       }
-      await notifyVisibility(true);
+      await notifyVisibility(true, version);
     };
 
     const handleVisibleState = async (): Promise<void> => {
-      await notifyVisibility(false);
+      await notifyVisibility(false, visibilityVersion);
       const policy = await getPolicy();
       if (policy?.autoResume) await resumeTrackedMedia();
 
@@ -156,11 +161,14 @@ export default defineContentScript({
       const hidden = document.hidden;
       if (hidden === lastKnownHidden) return;
       lastKnownHidden = hidden;
+      visibilityVersion += 1;
       if (hidden) void enforceHiddenState();
       else void handleVisibleState();
     };
 
     const removeToast = (): void => {
+      if (toastTimer !== undefined) window.clearTimeout(toastTimer);
+      toastTimer = undefined;
       toastHost?.remove();
       toastHost = null;
     };
@@ -299,7 +307,7 @@ export default defineContentScript({
       shadow.append(wrapper);
       (document.documentElement ?? document.body)?.append(host);
       toastHost = host;
-      window.setTimeout(removeToast, Math.max(2000, payload.durationMs));
+      toastTimer = window.setTimeout(removeToast, Math.max(2000, payload.durationMs));
     };
 
     document.addEventListener('visibilitychange', handleVisibilityChange, true);

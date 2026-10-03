@@ -4,6 +4,7 @@ import type {
   ActivityEntry,
   Settings,
   SiteRule,
+  SiteNotificationRule,
   TemporarySiteAllowance,
 } from './types';
 
@@ -30,6 +31,7 @@ export async function ensureStorageDefaults(): Promise<void> {
   const stored = await browser.storage.local.get([
     STORAGE_KEYS.settings,
     STORAGE_KEYS.rules,
+    STORAGE_KEYS.notificationRules,
     STORAGE_KEYS.temporarySiteAllowances,
     STORAGE_KEYS.activityLog,
   ]);
@@ -37,6 +39,7 @@ export async function ensureStorageDefaults(): Promise<void> {
   const updates: Record<string, unknown> = {};
   if (!stored[STORAGE_KEYS.settings]) updates[STORAGE_KEYS.settings] = DEFAULT_SETTINGS;
   if (!stored[STORAGE_KEYS.rules]) updates[STORAGE_KEYS.rules] = [];
+  if (!stored[STORAGE_KEYS.notificationRules]) updates[STORAGE_KEYS.notificationRules] = [];
   if (!stored[STORAGE_KEYS.temporarySiteAllowances]) {
     updates[STORAGE_KEYS.temporarySiteAllowances] = [];
   }
@@ -75,6 +78,16 @@ export async function getRules(): Promise<SiteRule[]> {
 
 export async function setRules(rules: SiteRule[]): Promise<void> {
   await browser.storage.local.set({ [STORAGE_KEYS.rules]: rules });
+}
+
+export async function getNotificationRules(): Promise<SiteNotificationRule[]> {
+  const result = await browser.storage.local.get(STORAGE_KEYS.notificationRules);
+  const rules = result[STORAGE_KEYS.notificationRules];
+  return Array.isArray(rules) ? (rules as SiteNotificationRule[]) : [];
+}
+
+export async function setNotificationRules(rules: SiteNotificationRule[]): Promise<void> {
+  await browser.storage.local.set({ [STORAGE_KEYS.notificationRules]: rules });
 }
 
 export async function getTemporarySiteAllowances(): Promise<TemporarySiteAllowance[]> {

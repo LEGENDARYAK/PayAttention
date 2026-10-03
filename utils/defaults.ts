@@ -15,6 +15,7 @@ export const DEFAULT_SETTINGS: Settings = {
 export const STORAGE_KEYS = {
   settings: 'settings',
   rules: 'rules',
+  notificationRules: 'notificationRules',
   temporarySiteAllowances: 'temporarySiteAllowances',
   activityLog: 'activityLog',
   tabAllowances: 'tabAllowances',

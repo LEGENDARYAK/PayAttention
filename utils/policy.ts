@@ -1,10 +1,11 @@
 import {
   getRules,
+  getNotificationRules,
   getSettings,
   getTemporarySiteAllowances,
   isTabAllowedUntilClose,
 } from './storage';
-import type { ResolvedPolicy, SiteBehavior, SiteRule } from './types';
+import type { ResolvedPolicy, SiteBehavior, SiteNotificationRule, SiteRule } from './types';
 import { hostnameFromUrl, normalizeHostname, safeUrl } from './url';
 
 function globToRegExp(glob: string): RegExp {
@@ -45,6 +46,13 @@ export function selectMatchingRule(rules: SiteRule[], url: string): SiteRule | u
     .sort((a, b) => b.score - a.score || b.index - a.index)[0]?.rule;
 }
 
+function selectMatchingNotificationRule(rules: SiteNotificationRule[], url: string): SiteNotificationRule | undefined {
+  return rules
+    .map((rule, index) => ({ rule, index, score: ruleSpecificity({ ...rule, behavior: 'pause' }) }))
+    .filter(({ rule }) => ruleMatches({ ...rule, behavior: 'pause' }, url))
+    .sort((a, b) => b.score - a.score || b.index - a.index)[0]?.rule;
+}
+
 function buildPolicy(
   behavior: SiteBehavior,
   source: ResolvedPolicy['source'],
@@ -70,7 +78,11 @@ function buildPolicy(
 }
 
 export async function resolvePolicy(url: string, tabId?: number): Promise<ResolvedPolicy> {
-  const settings = await getSettings();
+  const [baseSettings, notificationRules] = await Promise.all([getSettings(), getNotificationRules()]);
+  const notificationRule = selectMatchingNotificationRule(notificationRules, url);
+  const settings = notificationRule
+    ? { ...baseSettings, showToast: notificationRule.showToast, toastShowUndo: notificationRule.showResume }
+    : baseSettings;
   if (!settings.enabled) {
     return buildPolicy('allow', 'disabled', 'PayAttention is disabled.', settings);
   }

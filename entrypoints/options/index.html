@@ -37,6 +37,7 @@
             </div>
           </div>
 
+
           <label class="setting-row">
             <div>
               <strong>Enable PayAttention</strong>
@@ -104,6 +105,12 @@
             </div>
           </div>
 
+          <div class="rule-tabs" role="tablist" aria-label="Site rule options">
+            <button type="button" class="rule-tab active" data-rule-tab="behavior">Behavior</button>
+            <button type="button" class="rule-tab" data-rule-tab="notifications">Notifications</button>
+          </div>
+          <div id="behaviorRulesPanel">
+
           <form id="ruleForm" class="rule-form">
             <label>
               <span>Match</span>
@@ -137,6 +144,21 @@
             </table>
           </div>
           <p id="rulesEmpty" class="empty">No permanent rules yet.</p>
+          </div>
+
+          <div id="notificationRulesPanel" hidden>
+            <p class="note">Choose whether each matching site shows a notification and whether it includes a Resume button. More-specific matches take priority.</p>
+            <form id="notificationRuleForm" class="rule-form">
+              <label><span>Match</span><select id="notificationMatchType"><option value="domain">Whole domain + subdomains</option><option value="subdomain">Exact hostname</option><option value="url-pattern">URL pattern</option></select></label>
+              <label class="grow"><span>Pattern</span><input id="notificationPattern" type="text" placeholder="example.com" required /></label>
+              <label class="check-label"><input id="notificationShow" type="checkbox" checked /><span>Show notification</span></label>
+              <label class="check-label"><input id="notificationResume" type="checkbox" checked /><span>Show Resume button</span></label>
+              <button type="submit">Add notification rule</button>
+            </form>
+            <p id="notificationFeedback" class="feedback" role="status"></p>
+            <div class="table-wrap"><table><thead><tr><th>Pattern</th><th>Match</th><th>Notification</th><th>Resume</th><th></th></tr></thead><tbody id="notificationRulesBody"></tbody></table></div>
+            <p id="notificationRulesEmpty" class="empty">No site-specific notification rules.</p>
+          </div>
         </section>
 
         <section id="temporary" class="card">

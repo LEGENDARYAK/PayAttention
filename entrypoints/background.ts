@@ -2,11 +2,12 @@ import { browser, type Browser } from 'wxt/browser';
 import { defineBackground } from 'wxt/utils/define-background';
 import { DEFAULT_SETTINGS } from '../utils/defaults';
 import type { RuntimeMessage } from '../utils/messages';
-import { resolvePolicy, selectMatchingRule } from '../utils/policy';
+import { resolvePolicy, ruleMatches, selectMatchingRule } from '../utils/policy';
 import {
   appendActivity,
   ensureStorageDefaults,
   getMutedByExtensionMap,
+  getNotificationRules,
   getRules,
   getSettings,
   getTemporarySiteAllowances,
@@ -31,6 +32,7 @@ import { hostnameFromUrl, isSupportedWebUrl, makeId, normalizeHostname } from '.
 interface PauseAggregate {
   count: number;
   muted: boolean;
+  audible: boolean;
   reason: string;
   timer: ReturnType<typeof setTimeout>;
 }
@@ -47,6 +49,8 @@ export default defineBackground({
   type: 'module',
   main() {
     const pauseAggregates = new Map<number, PauseAggregate>();
+    const pendingToasts = new Map<number, ToastPayload>();
+    const visibilityVersions = new Map<number, number>();
 
     const initialize = async (): Promise<void> => {
       await ensureStorageDefaults();
@@ -176,7 +180,7 @@ export default defineBackground({
 
     const queuePauseAggregate = (
       tabId: number,
-      patch: { count?: number; muted?: boolean; reason?: string },
+      patch: { count?: number; muted?: boolean; audible?: boolean; reason?: string },
     ): void => {
       const previous = pauseAggregates.get(tabId);
       if (previous) clearTimeout(previous.timer);
@@ -184,6 +188,7 @@ export default defineBackground({
       const aggregate: PauseAggregate = {
         count: Math.max(0, (previous?.count ?? 0) + (patch.count ?? 0)),
         muted: Boolean(previous?.muted || patch.muted),
+        audible: Boolean(previous?.audible || patch.audible),
         reason: patch.reason ?? previous?.reason ?? 'The tab became hidden.',
         timer: setTimeout(() => {
           void flushPauseAggregate(tabId);
@@ -196,38 +201,40 @@ export default defineBackground({
       const aggregate = pauseAggregates.get(tabId);
       if (!aggregate) return;
       pauseAggregates.delete(tabId);
-      if (aggregate.count === 0 && !aggregate.muted) return;
+      if (aggregate.count === 0 && !aggregate.muted && !aggregate.audible) return;
 
       try {
         const tab = await browser.tabs.get(tabId);
-        const settings = await getSettings();
+        const policy = await resolvePolicy(tab.url ?? '', tabId);
         const hostname = hostnameFromUrl(tab.url ?? '') || 'unknown';
-        const activity: ActivityEntry = {
-          id: makeId('activity'),
-          timestamp: Date.now(),
-          hostname,
-          action: aggregate.count > 0 ? 'paused' : 'muted',
-          mediaCount: aggregate.count,
-          muted: aggregate.muted,
-          reason: aggregate.reason,
-        };
-        await appendActivity(activity);
+        if (aggregate.count > 0 || aggregate.audible) {
+          const activity: ActivityEntry = {
+            id: makeId('activity'),
+            timestamp: Date.now(),
+            hostname,
+            action: aggregate.count > 0 ? 'paused' : 'muted',
+            mediaCount: aggregate.count,
+            muted: aggregate.muted,
+            reason: aggregate.reason,
+          };
+          await appendActivity(activity);
+        }
 
-        if (settings.showToast) {
+        if (policy.showToast && (aggregate.count > 0 || aggregate.muted)) {
           const payload: ToastPayload = {
             mediaCount: aggregate.count,
             muted: aggregate.muted,
             reason: aggregate.reason,
-            autoResume: settings.autoResume,
-            showUndo: settings.toastShowUndo,
-            showReason: settings.toastShowReason,
-            durationMs: settings.toastDurationMs,
+            autoResume: policy.autoResume,
+            showUndo: policy.toastShowUndo,
+            showReason: policy.toastShowReason,
+            durationMs: policy.toastDurationMs,
           };
-          await browser.tabs.sendMessage(
-            tabId,
-            { type: 'SHOW_TOAST', payload } satisfies RuntimeMessage,
-            { frameId: 0 },
-          );
+          if (tab.active) {
+            try {
+              await browser.tabs.sendMessage(tabId, { type: 'SHOW_TOAST', payload } satisfies RuntimeMessage, { frameId: 0 });
+            } catch { pendingToasts.set(tabId, payload); }
+          } else pendingToasts.set(tabId, payload);
         }
       } catch {
         // Restricted pages and closed tabs cannot receive content-script messages.
@@ -292,6 +299,12 @@ export default defineBackground({
       await reconcileTab(tabId);
     };
 
+    const removeTemporarySiteAllowance = async (hostname: string): Promise<void> => {
+      const normalized = normalizeHostname(hostname);
+      const current = await getTemporarySiteAllowances();
+      await setTemporarySiteAllowances(current.filter((entry) => normalizeHostname(entry.hostname) !== normalized));
+    };
+
     const setCurrentSiteBehavior = async (
       tabId: number,
       hostname: string,
@@ -353,20 +366,6 @@ export default defineBackground({
       } catch {
         // No content script on restricted pages.
       }
-      try {
-        const tab = await browser.tabs.get(tabId);
-        await appendActivity({
-          id: makeId('activity'),
-          timestamp: Date.now(),
-          hostname: hostnameFromUrl(tab.url ?? '') || 'unknown',
-          action: 'resumed',
-          mediaCount: 0,
-          muted: false,
-          reason: 'Resumed from the PayAttention notification.',
-        });
-      } catch {
-        // Tab may have closed.
-      }
     };
 
     const handleMessage = async (
@@ -380,16 +379,32 @@ export default defineBackground({
         case 'DOCUMENT_VISIBILITY': {
           const tabId = sender.tab?.id;
           if (typeof tabId !== 'number') return { ok: false };
+          const previousVersion = visibilityVersions.get(tabId) ?? -1;
+          const version = message.transitionId;
+          if (version < previousVersion) return { ok: true, stale: true };
+          visibilityVersions.set(tabId, version);
           const policy = await resolvePolicy(message.url || sender.tab?.url || '', tabId);
           let muted = false;
-          if (message.hidden && policy.shouldMute && !policy.allowed) {
-            muted = await muteTab(tabId);
-            queuePauseAggregate(tabId, {
-              muted,
-              reason: 'You switched away from this tab.',
-            });
+          if (message.hidden && policy.shouldMute && !policy.allowed && visibilityVersions.get(tabId) === version) {
+            const currentTab = await browser.tabs.get(tabId);
+            if (visibilityVersions.get(tabId) === version) {
+              muted = await muteTab(tabId);
+              if (visibilityVersions.get(tabId) !== version) await unmuteTab(tabId);
+              queuePauseAggregate(tabId, {
+                muted,
+                audible: currentTab.audible === true,
+                reason: 'You switched away from this tab.',
+              });
+            }
           } else if (!message.hidden) {
             await unmuteTab(tabId);
+            const payload = pendingToasts.get(tabId);
+            if (payload) {
+              pendingToasts.delete(tabId);
+              try {
+                await browser.tabs.sendMessage(tabId, { type: 'SHOW_TOAST', payload } satisfies RuntimeMessage, { frameId: 0 });
+              } catch { pendingToasts.set(tabId, payload); /* Retry on the next visible transition. */ }
+            }
           }
           await updateBadge(tabId);
           return { ok: true, policy, muted };
@@ -417,6 +432,11 @@ export default defineBackground({
 
         case 'ADD_TEMP_SITE_ALLOWANCE':
           await addTemporarySiteAllowance(message.tabId, message.hostname, message.minutes);
+          return { ok: true };
+
+        case 'REMOVE_TEMP_SITE_ALLOWANCE':
+          await removeTemporarySiteAllowance(message.hostname);
+          await reconcileTab(message.tabId);
           return { ok: true };
 
         case 'TOGGLE_TAB_ALLOWANCE': {
@@ -486,6 +506,10 @@ export default defineBackground({
     });
 
     browser.tabs.onUpdated.addListener((tabId, changeInfo) => {
+      if (changeInfo.url) {
+        visibilityVersions.delete(tabId);
+        pendingToasts.delete(tabId);
+      }
       if (changeInfo.url || changeInfo.status === 'complete') {
         void updateBadge(tabId);
       }
@@ -495,6 +519,8 @@ export default defineBackground({
       const aggregate = pauseAggregates.get(tabId);
       if (aggregate) clearTimeout(aggregate.timer);
       pauseAggregates.delete(tabId);
+      pendingToasts.delete(tabId);
+      visibilityVersions.delete(tabId);
       void removeTabSessionState(tabId);
     });
 

@@ -52,6 +52,14 @@ kbd { border: 1px solid #cbd5e1; border-bottom-width: 2px; border-radius: 5px; b
 .rule-form { display: flex; align-items: end; gap: 9px; border-top: 1px solid #eef2f7; padding-top: 16px; }
 .rule-form label { display: grid; gap: 6px; }
 .rule-form label > span { color: #475569; font-size: 11px; font-weight: 750; }
+.rule-tabs { display: flex; gap: 7px; border-bottom: 1px solid #e2e8f0; margin: 14px 0 4px; }
+.rule-tab { border: 0; border-radius: 9px 9px 0 0; background: transparent; color: #64748b; }
+.rule-tab.active { background: #f1f5f9; color: #0f172a; }
+.check-label { display: flex !important; align-items: center; gap: 7px !important; white-space: nowrap; }
+.check-label input { width: 16px; height: 16px; }
+.expiry-control { display: flex !important; align-items: center; gap: 6px !important; }
+.expiry-control input { min-height: 34px; width: 190px; padding: 6px; font-size: 11px; }
+.expiry-control button { white-space: nowrap; }
 .rule-form .grow { flex: 1; }
 .rule-form input { width: 100%; }
 .table-wrap { overflow-x: auto; margin-top: 8px; }

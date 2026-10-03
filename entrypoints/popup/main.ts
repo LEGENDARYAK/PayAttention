@@ -1,6 +1,7 @@
 import { browser } from 'wxt/browser';
 import type { RuntimeMessage } from '../../utils/messages';
 import type { PopupState, SiteBehavior } from '../../utils/types';
+import { normalizeHostname } from '../../utils/url';
 import './style.css';
 
 const enabledToggle = document.querySelector<HTMLInputElement>('#enabledToggle');
@@ -15,6 +16,7 @@ const customMinutes = document.querySelector<HTMLInputElement>('#customMinutes')
 const temporaryAllowanceButton = document.querySelector<HTMLButtonElement>(
   '#temporaryAllowanceButton',
 );
+const removeTemporaryAllowanceButton = document.querySelector<HTMLButtonElement>('#removeTemporaryAllowanceButton');
 const permanentAllowanceButton = document.querySelector<HTMLButtonElement>(
   '#permanentAllowanceButton',
 );
@@ -37,6 +39,7 @@ function assertElements(): void {
     !temporaryDuration ||
     !customMinutes ||
     !temporaryAllowanceButton ||
+    !removeTemporaryAllowanceButton ||
     !permanentAllowanceButton ||
     !siteBehavior ||
     !saveBehaviorButton ||
@@ -108,8 +111,13 @@ function render(): void {
   tabAllowanceButton!.classList.toggle('active-choice', state.tabAllowedUntilClose);
 
   temporaryAllowanceButton!.textContent = state.hasTemporarySiteAllowance
-    ? 'Extend temporary allowance'
+    ? 'Update temporary allowance'
     : 'Temporarily allow site';
+  removeTemporaryAllowanceButton!.hidden = !state.hasTemporarySiteAllowance;
+
+  const exactPermanentAllowance = state.currentSiteRule?.matchType === 'subdomain' &&
+    normalizeHostname(state.currentSiteRule.pattern) === normalizeHostname(state.hostname) && state.currentSiteRule.behavior === 'allow';
+  permanentAllowanceButton!.textContent = exactPermanentAllowance ? 'Remove permanent allowance' : 'Permanently allow this site';
 
   siteBehavior!.value =
     state.currentSiteRule?.matchType === 'subdomain' &&
@@ -189,13 +197,18 @@ permanentAllowanceButton!.addEventListener('click', () => {
   void runAction(
     async () => {
       await send({
-        type: 'ADD_PERMANENT_SITE_ALLOWANCE',
-        tabId: state!.tabId!,
-        hostname: state!.hostname,
+        type: 'SET_CURRENT_SITE_BEHAVIOR',
+        tabId: state!.tabId!, hostname: state!.hostname,
+        behavior: state!.currentSiteRule?.behavior === 'allow' && state!.currentSiteRule.matchType === 'subdomain' && normalizeHostname(state!.currentSiteRule.pattern) === normalizeHostname(state!.hostname) ? 'default' : 'allow',
       });
     },
-    `Permanently allowed ${state.hostname}.`,
+    'Permanent site allowance updated.',
   );
+});
+
+removeTemporaryAllowanceButton!.addEventListener('click', () => {
+  if (!state?.tabId || !state.hostname) return;
+  void runAction(async () => { await send({ type: 'REMOVE_TEMP_SITE_ALLOWANCE', tabId: state!.tabId!, hostname: state!.hostname }); }, 'Temporary allowance removed.');
 });
 
 saveBehaviorButton!.addEventListener('click', () => {
