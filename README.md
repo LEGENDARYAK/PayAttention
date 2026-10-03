@@ -1,6 +1,6 @@
 # PayAttention
 
-PayAttention is a privacy-first browser extension that pauses audio and video when you leave a tab, keeping media attached to your attention instead of playing in the background.
+I love music, podcasts, YouTube videos, white noise; but sometimes that stuff can overload your senses and dull your thinking. One day I found myself trying to play a game with audio, listen to music, and half-listen to a podcast, all at the same time. Something had to change, so I made this! PayAttention is a privacy-first browser extension that pauses audio and video when you leave a tab, keeping media attached to your attention instead of playing in the background.
 
 ## Install
 
